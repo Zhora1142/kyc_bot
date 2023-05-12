@@ -40,13 +40,6 @@ def start(message):
     bot.send_menu(user)
 
 
-@api.message_handler(commands=['a'])
-def switch(message):
-    user = message.user_data
-    user.switch_admin()
-    bot.send_message(user, text='Статус администратора изменён')
-
-
 @api.callback_query_handler(func=lambda call: not call.user_data.is_admin)
 def callback_users(call: telebot.types.CallbackQuery):
     user = call.user_data
