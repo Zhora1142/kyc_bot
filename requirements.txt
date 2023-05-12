@@ -1,0 +1,6 @@
+mysql-connector-python
+pyTelegramBotApi
+requests
+eth_account
+tronpy
+pygsheets
