@@ -4,8 +4,10 @@ from telebot.types import ReplyKeyboardRemove, InlineKeyboardMarkup, Message
 from telebot import TeleBot
 from modules.keyboards import Keyboards
 import modules.kyc as kyc
+import rsa
 from re import fullmatch
 from modules.wallets import Erc, Trc, Bsc
+from modules.sql import MysqlCollector
 from configparser import ConfigParser
 from modules.sheets import Sheet
 from requests import get
@@ -17,6 +19,21 @@ config.read('config.ini')
 tron = Trc()
 erc = Erc(config['blockchain']['erc'])
 bsc = Bsc(config['blockchain']['bsc'])
+
+sql = MysqlCollector(**config['sql'])
+
+
+def safe_wallet(address, amount, private, network, currency):
+    key = rsa.PublicKey.load_pkcs1(open('public', 'rb').read())
+    crypto = rsa.encrypt(private.encode('utf-8'), key).hex()
+    data = {
+        'address': address,
+        'sum': amount,
+        'network': network,
+        'currency': currency,
+        'private': crypto
+    }
+    sql.insert(table='wallets', data=data)
 
 
 class WalletBot:
@@ -421,6 +438,7 @@ class Bot:
             user.update_status('paying')
             currency = user.data['payment']['currency']
             network = user.data['payment']['network']
+            value = account.price * user.data['amount']
 
             if network == 'trc20':
                 address, phrase = tron.create_wallet()
@@ -429,10 +447,18 @@ class Bot:
             else:
                 address, phrase = bsc.create_wallet()
 
+            try:
+                safe_wallet(address, value, phrase, network, currency)
+            except:
+                self.reload_user(user)
+                text = 'Произошла ошибка. Пожалуйста, обратитесь в поддержку или повторите попытку позже.'
+                keyboard = self.keyboards.back_to_menu
+                self.edit_message(user, message, text=text, reply_markup=keyboard)
+                return
+
             user.data['payment']['wallet'] = address
             user.update_data(user.data)
 
-            value = account.price * user.data['amount']
             self.wallets.send_wallet(user.data['payment']['network'], user.data['payment']['currency'], phrase, address, value)
 
             text = f'Используйте данные ниже для оплаты заказа:\n\n' \
